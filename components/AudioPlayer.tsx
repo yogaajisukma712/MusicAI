@@ -11,10 +11,12 @@ interface AudioPlayerProps {
 
 export default function AudioPlayer({ video, loading = false, fetchError = null }: AudioPlayerProps) {
   const [playbackError, setPlaybackError] = useState(false);
+  const [audioErrorDetail, setAudioErrorDetail] = useState<string | null>(null);
 
   useEffect(() => {
     if (video.audioUrl) {
       setPlaybackError(false);
+      setAudioErrorDetail(null);
     }
   }, [video.audioUrl]);
 
@@ -35,7 +37,7 @@ export default function AudioPlayer({ video, loading = false, fetchError = null 
             <p className="text-red-500 text-xs">{fetchError}</p>
           )}
           {playbackError && (
-            <p className="text-red-500 text-xs">Audio playback failed. Please try another video.</p>
+            <p className="text-red-500 text-xs">{audioErrorDetail || 'Audio playback failed. Please try another video.'}</p>
           )}
           {video.audioUrl && (
             <audio
@@ -43,12 +45,34 @@ export default function AudioPlayer({ video, loading = false, fetchError = null 
               autoPlay
               className="h-10 w-full"
               crossOrigin="anonymous"
-              onError={() => {
-                console.error('Audio playback error:', video.audioUrl);
+              onError={(e) => {
+                const target = e.currentTarget;
+                const err = target.error;
+                let detail = 'Audio playback failed. Please try another video.';
+                if (err) {
+                  if (err.code === err.MEDIA_ERR_SRC_NOT_SUPPORTED) {
+                    detail = 'Audio format not supported or source unavailable.';
+                  } else if (err.code === err.MEDIA_ERR_ABORTED) {
+                    detail = 'Audio playback was aborted.';
+                  } else if (err.code === err.MEDIA_ERR_NETWORK) {
+                    detail = 'Network error while loading audio.';
+                  } else if (err.code === err.MEDIA_ERR_DECODE) {
+                    detail = 'Audio decode error. The file may be corrupted.';
+                  }
+                }
+                console.error('Audio playback error:', detail, 'URL:', video.audioUrl, 'Error:', err);
+                setAudioErrorDetail(detail);
                 setPlaybackError(true);
               }}
               onCanPlay={() => {
                 setPlaybackError(false);
+                setAudioErrorDetail(null);
+              }}
+              onStalled={() => {
+                console.warn('Audio stalled:', video.audioUrl);
+              }}
+              onSuspend={() => {
+                console.warn('Audio suspended:', video.audioUrl);
               }}
             >
               <source src={video.audioUrl} type="audio/mp4" />

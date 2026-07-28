@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import axios from 'axios';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const audioUrl = searchParams.get('url');
-  console.log('Proxying audio URL:', audioUrl);
 
   if (!audioUrl) {
     return NextResponse.json({ error: 'Missing url parameter' }, { status: 400 });
@@ -29,43 +27,41 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    console.log('Proxying audio URL:', audioUrl);
-
     const axiosHeaders: Record<string, string> = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       Referer: 'https://www.youtube.com/',
     };
 
-    const response = await axios.get(audioUrl, {
-      responseType: 'arraybuffer',
+    const response = await fetch(audioUrl, {
       headers: axiosHeaders,
-      timeout: 30000,
-      maxRedirects: 5,
+      redirect: 'follow',
     });
 
-    const contentType = response.headers['content-type'] || 'audio/mpeg';
-    const contentLength = response.headers['content-length'];
+    if (!response.ok || !response.body) {
+      console.error('Upstream fetch failed:', response.status, response.statusText);
+      return NextResponse.json(
+        { error: 'Failed to fetch audio from source' },
+        { status: response.status || 500 },
+      );
+    }
+
+    const contentType = response.headers.get('content-type') || 'audio/mpeg';
+    const contentLength = response.headers.get('content-length');
+    const acceptRanges = response.headers.get('accept-ranges') || 'bytes';
 
     const responseHeaders = new Headers();
-    responseHeaders.set('Content-Type', String(contentType));
+    responseHeaders.set('Content-Type', contentType);
     responseHeaders.set('Access-Control-Allow-Origin', '*');
     responseHeaders.set('Accept-Ranges', 'bytes');
     responseHeaders.set('Cache-Control', 'public, max-age=3600');
-    if (contentLength) responseHeaders.set('Content-Length', String(contentLength));
+    if (contentLength) responseHeaders.set('Content-Length', contentLength);
 
-    return new NextResponse(response.data, {
+    return new NextResponse(response.body, {
       status: 200,
       headers: responseHeaders,
     });
   } catch (error) {
     console.error('Stream proxy error:', error);
-    if (axios.isAxiosError(error)) {
-      const status = error.response?.status || 500;
-      return NextResponse.json(
-        { error: 'Failed to fetch audio from source' },
-        { status },
-      );
-    }
     return NextResponse.json(
       { error: 'Failed to stream audio' },
       { status: 500 },
