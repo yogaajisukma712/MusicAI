@@ -128,7 +128,7 @@ export class YoutubeAudioRepository {
           continue;
         }
 
-        const results = parseSearchResults(response.data, limit);
+        const results = parseSearchResults(response.data, limit, normalized);
         if (results.length > 0) {
           return results;
         }
@@ -173,6 +173,7 @@ export class YoutubeAudioRepository {
 
         const audioUrl = parseAudioUrl(response.data);
         if (audioUrl) {
+          console.log('Audio URL:', audioUrl);
           return audioUrl;
         }
         errors.push(`No audio stream on ${instance}`);
@@ -188,8 +189,10 @@ export class YoutubeAudioRepository {
   }
 }
 
-function parseSearchResults(data: any, limit: number): SearchResult[] {
+function parseSearchResults(data: any, limit: number, instance: string): SearchResult[] {
   if (!Array.isArray(data)) return [];
+
+  const normalized = normalizeInstance(instance);
 
   return data
     .map((item: any) => {
@@ -197,9 +200,15 @@ function parseSearchResults(data: any, limit: number): SearchResult[] {
       const title = item.title;
       const uploader = item.author;
       const durationSeconds = item.lengthSeconds ?? -1;
-      const thumbnailUrl = item.videoThumbnails?.[0]?.url ?? null;
+      let thumbnailUrl = item.videoThumbnails?.[0]?.url ?? null;
 
       if (!videoId || !title) return null;
+
+      if (thumbnailUrl && thumbnailUrl.startsWith('/')) {
+        thumbnailUrl = `${normalized}${thumbnailUrl}`;
+      }
+
+      console.log('Thumbnail URL:', thumbnailUrl);
 
       return {
         videoId,

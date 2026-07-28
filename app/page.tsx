@@ -11,6 +11,8 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentVideo, setCurrentVideo] = useState<(SearchResult & { audioUrl?: string }) | null>(null);
+  const [audioLoading, setAudioLoading] = useState(false);
+  const [audioError, setAudioError] = useState<string | null>(null);
 
   const handleSearch = async (query: string) => {
     setLoading(true);
@@ -31,7 +33,10 @@ export default function Home() {
 
   const handlePlay = async (video: SearchResult) => {
     setCurrentVideo(video);
+    setAudioLoading(true);
+    setAudioError(null);
     try {
+      console.log('Fetching audio for:', video.videoUrl);
       const res = await fetch('/api/audio', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -39,9 +44,13 @@ export default function Home() {
       });
       if (!res.ok) throw new Error('Failed to get audio');
       const data = await res.json();
+      console.log('Audio URL:', data.audioUrl);
       setCurrentVideo({ ...video, audioUrl: data.audioUrl });
     } catch (e) {
       console.error('Play error:', e);
+      setAudioError(e instanceof Error ? e.message : 'Failed to fetch audio');
+    } finally {
+      setAudioLoading(false);
     }
   };
 
@@ -51,7 +60,13 @@ export default function Home() {
       <SearchBar onSearch={handleSearch} loading={loading} />
       {error && <p className="text-red-500 text-center mt-4">{error}</p>}
       <VideoList results={results} onPlay={handlePlay} loading={loading} />
-      {currentVideo && <AudioPlayer video={currentVideo} />}
+      {currentVideo && (
+        <AudioPlayer
+          video={currentVideo}
+          loading={audioLoading}
+          fetchError={audioError}
+        />
+      )}
     </main>
   );
 }
