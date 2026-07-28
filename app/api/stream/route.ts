@@ -4,6 +4,7 @@ import axios from 'axios';
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const audioUrl = searchParams.get('url');
+  console.log('Proxying audio URL:', audioUrl);
 
   if (!audioUrl) {
     return NextResponse.json({ error: 'Missing url parameter' }, { status: 400 });
@@ -28,38 +29,32 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const rangeHeader = request.headers.get('range');
+    console.log('Proxying audio URL:', audioUrl);
+
     const axiosHeaders: Record<string, string> = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       Referer: 'https://www.youtube.com/',
     };
-    if (rangeHeader) {
-      axiosHeaders['Range'] = rangeHeader;
-    }
 
     const response = await axios.get(audioUrl, {
-      responseType: 'stream',
+      responseType: 'arraybuffer',
       headers: axiosHeaders,
       timeout: 30000,
+      maxRedirects: 5,
     });
 
-    const contentType =
-      response.headers['content-type'] || 'audio/mpeg';
+    const contentType = response.headers['content-type'] || 'audio/mpeg';
     const contentLength = response.headers['content-length'];
-    const contentRange = response.headers['content-range'];
-    const acceptRanges = response.headers['accept-ranges'];
-    const upstreamStatus = response.status;
 
     const responseHeaders = new Headers();
     responseHeaders.set('Content-Type', String(contentType));
     responseHeaders.set('Access-Control-Allow-Origin', '*');
-    responseHeaders.set('Accept-Ranges', String(acceptRanges || 'bytes'));
+    responseHeaders.set('Accept-Ranges', 'bytes');
     responseHeaders.set('Cache-Control', 'public, max-age=3600');
     if (contentLength) responseHeaders.set('Content-Length', String(contentLength));
-    if (contentRange) responseHeaders.set('Content-Range', String(contentRange));
 
     return new NextResponse(response.data, {
-      status: upstreamStatus,
+      status: 200,
       headers: responseHeaders,
     });
   } catch (error) {
