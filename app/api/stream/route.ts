@@ -27,6 +27,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    console.log('Stream proxy request for URL:', audioUrl);
+    console.log('Parsed hostname:', parsedUrl.hostname);
+
     const axiosHeaders: Record<string, string> = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       Referer: 'https://www.youtube.com/',
@@ -36,6 +39,8 @@ export async function GET(request: NextRequest) {
       headers: axiosHeaders,
       redirect: 'follow',
     });
+
+    console.log('Upstream response status:', response.status, 'Content-Type:', response.headers.get('content-type'));
 
     if (!response.ok || !response.body) {
       console.error('Upstream fetch failed:', response.status, response.statusText);
