@@ -22,13 +22,23 @@ export async function GET(request: NextRequest) {
     'youtube.com',
     'yt3.ggpht.com',
   ];
-  if (!allowedHosts.some((h) => parsedUrl.hostname.endsWith(h))) {
+
+  const hostname = parsedUrl.hostname;
+  const isAllowed = allowedHosts.some((h) => {
+    if (hostname === h) return true;
+    if (hostname.endsWith('.' + h)) return true;
+    if (hostname.includes('.' + h + '.')) return true;
+    if (hostname.startsWith(h + '.')) return true;
+    return false;
+  });
+
+  if (!isAllowed) {
     return NextResponse.json({ error: 'Disallowed audio source' }, { status: 403 });
   }
 
   try {
     console.log('Stream proxy request for URL:', audioUrl);
-    console.log('Parsed hostname:', parsedUrl.hostname);
+    console.log('Parsed hostname:', hostname);
 
     const axiosHeaders: Record<string, string> = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',

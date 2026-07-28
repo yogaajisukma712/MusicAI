@@ -11,6 +11,8 @@ export interface SearchResult {
 
 const DEFAULT_INSTANCES = [
   'https://inv.zoomerville.com',
+  'https://yewtu.be',
+  'https://invidious.tiekoetter.com',
 ];
 
 const API_REGISTRY = 'https://api.invidious.io/instances.json';
@@ -87,6 +89,16 @@ function classifyError(instance: string, error: any): string {
   return `unexpected error on ${instance}: ${error?.message || error}`;
 }
 
+const AUDIO_ITAGS = new Set([139, 140, 141, 249, 250, 251]);
+
+function resolveUrl(base: string, url: string): string {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  if (url.startsWith('//')) return `https:${url}`;
+  if (url.startsWith('/')) return `${base}${url}`;
+  return url;
+}
+
 export class YoutubeAudioRepository {
   private static instanceList: string[] = DEFAULT_INSTANCES;
   private static instanceListPromise: Promise<string[]> | null = null;
@@ -128,7 +140,7 @@ export class YoutubeAudioRepository {
           continue;
         }
 
-        const results = parseSearchResults(response.data, limit, normalized);
+        const results = parseSearchResults(response.data, limit);
         if (results.length > 0) {
           return results;
         }
@@ -157,11 +169,12 @@ export class YoutubeAudioRepository {
     const baseDelay = 800;
 
     for (const instance of normalizedInstances) {
-      const infoUrl = `${instance}/api/v1/videos/${videoId}?fields=adaptiveFormats,title,author,lengthSeconds,videoThumbnails`;
+      const infoUrl = `${instance}/api/v1/videos/${videoId}?fields=adaptiveFormats,formatStreams,title,author,lengthSeconds,videoThumbnails`;
 
       try {
         const response = await withRetry(
-          () => axiosInstance.get(infoUrl, {}),
+          () =>
+            axiosInstance.get(infoUrl, {}),
           retries,
           baseDelay,
         );
@@ -171,7 +184,10 @@ export class YoutubeAudioRepository {
           continue;
         }
 
-        const audioUrl = parseAudioUrl(response.data);
+        const responseData = response.data;
+        console.log(`Invidious response from ${instance}: adaptiveFormats=${Array.isArray(responseData.adaptiveFormats) ? responseData.adaptiveFormats.length : 0}, formatStreams=${Array.isArray(responseData.formatStreams) ? responseData.formatStreams.length : 0}`);
+
+        const audioUrl = parseAudioUrl(responseData, instance);
         if (audioUrl) {
           console.log('Audio URL:', audioUrl);
           return audioUrl;
@@ -189,26 +205,19 @@ export class YoutubeAudioRepository {
   }
 }
 
-function parseSearchResults(data: any, limit: number, instance: string): SearchResult[] {
+function parseSearchResults(data: any, limit: number): SearchResult[] {
   if (!Array.isArray(data)) return [];
 
-  const normalized = normalizeInstance(instance);
-
   return data
-    .map((item: any) => {
-      const videoId = item.videoId;
-      const title = item.title;
-      const uploader = item.author;
-      const durationSeconds = item.lengthSeconds ?? -1;
-      let thumbnailUrl = item.videoThumbnails?.[0]?.url ?? null;
+    .map((item: any): SearchResult | null => {
+      const videoId: string = item.videoId;
+      const title: string = item.title;
+      const uploader: string = item.author;
+      const durationSeconds: number = item.lengthSeconds ?? -1;
 
       if (!videoId || !title) return null;
 
-      if (thumbnailUrl && thumbnailUrl.startsWith('/')) {
-        thumbnailUrl = `${normalized}${thumbnailUrl}`;
-      }
-
-      console.log('Thumbnail URL:', thumbnailUrl);
+      const thumbnailUrl: string = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 
       return {
         videoId,
@@ -223,19 +232,40 @@ function parseSearchResults(data: any, limit: number, instance: string): SearchR
     .slice(0, limit);
 }
 
-function parseAudioUrl(data: any): string | null {
-  const adaptiveFormats = data?.adaptiveFormats;
-  if (!Array.isArray(adaptiveFormats)) return null;
+function parseAudioUrl(data: any, instanceOrigin: string): string | null {
+  const allFormats: any[] = [];
 
-  const audioFormats = adaptiveFormats
-    .filter((fmt: any) => fmt.type?.startsWith('audio/'))
+  if (Array.isArray(data?.adaptiveFormats)) {
+    allFormats.push(...data.adaptiveFormats);
+  }
+
+  if (Array.isArray(data?.formatStreams)) {
+    allFormats.push(...data.formatStreams);
+  }
+
+  console.log(`parseAudioUrl: checking ${allFormats.length} total formats from ${instanceOrigin}`);
+
+  const audioFormats = allFormats
+    .filter((fmt: any) => {
+      if (!fmt.url) return false;
+      if (fmt.type?.startsWith('audio/')) return true;
+      if (AUDIO_ITAGS.has(fmt.itag)) return true;
+      return false;
+    })
     .map((fmt: any) => ({
-      url: fmt.url,
+      url: resolveUrl(instanceOrigin, fmt.url),
       bitrate: fmt.bitrate ?? 0,
+      itag: fmt.itag ?? 0,
+      type: fmt.type ?? 'unknown',
     }));
 
-  if (audioFormats.length === 0) return null;
+  if (audioFormats.length === 0) {
+    console.warn('parseAudioUrl: no audio formats found. Available itags:', allFormats.map((f: any) => `${f.itag}:${f.type}`).join(', '));
+    return null;
+  }
 
   audioFormats.sort((a, b) => b.bitrate - a.bitrate);
-  return audioFormats[0].url;
+  const best = audioFormats[0];
+  console.log(`parseAudioUrl: selected audio format itag=${best.itag} type=${best.type} bitrate=${best.bitrate}`);
+  return best.url;
 }
