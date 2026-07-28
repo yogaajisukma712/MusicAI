@@ -21,7 +21,13 @@ export default function VideoCard({ video, onPlay }: VideoCardProps) {
           <img
             src={video.thumbnailUrl}
             alt={video.title}
+            loading="lazy"
             className="w-full h-40 object-cover"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+              target.parentElement!.innerHTML = '<div class=\"w-full h-40 bg-gray-200 flex items-center justify-center\"><span class=\"text-gray-400\">Thumbnail unavailable</span></div>';
+            }}
           />
         ) : (
           <div className="w-full h-40 bg-gray-200 flex items-center justify-center">

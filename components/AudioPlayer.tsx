@@ -35,23 +35,26 @@ export default function AudioPlayer({ video, loading = false, fetchError = null 
             <p className="text-red-500 text-xs">{fetchError}</p>
           )}
           {playbackError && (
-            <p className="text-red-500 text-xs">Audio playback failed. Direct audio URLs may be blocked by CORS. Consider proxying audio through the server.</p>
+            <p className="text-red-500 text-xs">Audio playback failed. Please try another video.</p>
           )}
-          <audio
-            controls
-            autoPlay
-            className="h-10"
-            onError={() => {
-              console.error('Audio playback error:', video.audioUrl);
-              setPlaybackError(true);
-            }}
-            onCanPlay={() => {
-              setPlaybackError(false);
-            }}
-          >
-            {video.audioUrl && <source src={video.audioUrl} type="audio/mp4" />}
-            Your browser does not support the audio element.
-          </audio>
+          {video.audioUrl && (
+            <audio
+              controls
+              autoPlay
+              className="h-10 w-full"
+              crossOrigin="anonymous"
+              onError={() => {
+                console.error('Audio playback error:', video.audioUrl);
+                setPlaybackError(true);
+              }}
+              onCanPlay={() => {
+                setPlaybackError(false);
+              }}
+            >
+              <source src={video.audioUrl} type="audio/mp4" />
+              Your browser does not support the audio element.
+            </audio>
+          )}
         </div>
       </div>
     </div>

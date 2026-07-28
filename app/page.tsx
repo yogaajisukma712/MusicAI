@@ -45,7 +45,7 @@ export default function Home() {
       if (!res.ok) throw new Error('Failed to get audio');
       const data = await res.json();
       console.log('Audio URL:', data.audioUrl);
-      setCurrentVideo({ ...video, audioUrl: data.audioUrl });
+      setCurrentVideo({ ...video, audioUrl: `/api/stream?url=${encodeURIComponent(data.audioUrl)}` });
     } catch (e) {
       console.error('Play error:', e);
       setAudioError(e instanceof Error ? e.message : 'Failed to fetch audio');
@@ -55,7 +55,7 @@ export default function Home() {
   };
 
   return (
-    <main className="max-w-4xl mx-auto px-4 py-8">
+    <main className="max-w-4xl mx-auto px-4 py-8 pb-24">
       <h1 className="text-3xl font-bold mb-8 text-center">MusicAI</h1>
       <SearchBar onSearch={handleSearch} loading={loading} />
       {error && <p className="text-red-500 text-center mt-4">{error}</p>}
