@@ -15,7 +15,8 @@ export async function GET(request: Request) {
     const results = await repo.search(query, 20);
     return NextResponse.json(results);
   } catch (error) {
+    const message = error instanceof Error ? error.message : 'Search failed';
     console.error('Search error:', error);
-    return NextResponse.json({ error: 'Search failed' }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
